@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { requestPrediction, requestForecast } from "../services/apiService";
+import { requestPrediction, requestForecast, getMockPredictionData, getMockForecastData } from "../services/apiService";
 import LocationCard from "../components/LocationCard";
 import WeatherCard from "../components/WeatherCard";
 import PredictionCard from "../components/PredictionCard";
@@ -11,9 +11,10 @@ import DashboardView from "../components/DashboardView";
 import HistoryView from "../components/HistoryView";
 import WeatherForecastCard from "../components/WeatherForecastCard";
 import GroundwaterTrendCard from "../components/GroundwaterTrendCard";
+import SystemAlertCard from "../components/SystemAlertCard";
 import {
     FiLayout, FiTrendingDown, FiCloud, FiInfo,
-    FiActivity, FiAlertTriangle, FiBookOpen
+    FiActivity, FiAlertTriangle, FiBookOpen, FiRefreshCw
 } from "react-icons/fi";
 
 const TABS = [
@@ -33,7 +34,7 @@ function Prediction({ onDataLoaded }) {
     const [forecastData,    setForecastData]    = useState(null);
     const [locationCoords,  setLocationCoords]  = useState({ latitude: null, longitude: null });
 
-    const fetchAllData = async (lat, lng) => {
+    const fetchAllData = async (lat, lng, isExplicitRetry = false) => {
         setIsLoading(true);
         setError(null);
         const year = new Date().getFullYear();
@@ -43,7 +44,7 @@ function Prediction({ onDataLoaded }) {
                 requestPrediction({ latitude: lat, longitude: lng, year, month }),
                 requestForecast({ latitude: lat, longitude: lng })
             ]);
-            setPredictionData(pred);
+            setPredictionData({ ...pred, is_demo: false });
             setForecastData(fcast);
             
             // Push location details and weather condition up to the parent App/Navbar
@@ -52,20 +53,55 @@ function Prediction({ onDataLoaded }) {
             }
         } catch (err) {
             console.error("API Fetch Error:", err);
-            setError(err.response ? "Prediction could not be generated." : "Unable to connect to prediction server.");
+            // Fallback to Demo Mode so the dashboard remains fully functional even when backend is offline
+            const mockPred = getMockPredictionData(lat, lng);
+            const mockFcast = getMockForecastData();
+            setPredictionData(mockPred);
+            setForecastData(mockFcast);
+            if (onDataLoaded) {
+                onDataLoaded(mockPred.location, mockPred.weather?.condition);
+            }
+            if (isExplicitRetry && !err.response) {
+                console.warn("Prediction server (http://127.0.0.1:8000) is unreachable. Operating in Demo Mode.");
+            }
         } finally {
             setIsLoading(false);
         }
     };
 
-    const runAutomaticDetection = () => {
-        if (!navigator.geolocation) {
-            setError("Location permission is required for groundwater prediction.");
-            setIsLoading(false);
-            return;
-        }
+    const handleEnableDemoMode = (lat = 13.0827, lng = 80.2707) => {
         setIsLoading(true);
         setError(null);
+        setTimeout(() => {
+            const mockPred = getMockPredictionData(lat, lng);
+            const mockFcast = getMockForecastData();
+            setPredictionData(mockPred);
+            setForecastData(mockFcast);
+            setLocationCoords({ latitude: lat, longitude: lng });
+            if (onDataLoaded) {
+                onDataLoaded(mockPred.location, mockPred.weather?.condition);
+            }
+            setIsLoading(false);
+        }, 400);
+    };
+
+    const handleManualLocationSubmit = (lat, lng) => {
+        setLocationCoords({ latitude: lat, longitude: lng });
+        fetchAllData(lat, lng, true);
+    };
+
+    const runAutomaticDetection = () => {
+        setIsLoading(true);
+        setError(null);
+        const defaultLat = 13.0827;
+        const defaultLng = 80.2707;
+
+        if (!navigator.geolocation) {
+            setLocationCoords({ latitude: defaultLat, longitude: defaultLng });
+            fetchAllData(defaultLat, defaultLng);
+            return;
+        }
+
         navigator.geolocation.getCurrentPosition(
             (pos) => {
                 const lat = pos.coords.latitude;
@@ -74,11 +110,12 @@ function Prediction({ onDataLoaded }) {
                 fetchAllData(lat, lng);
             },
             (geoError) => {
-                console.error("Geolocation Error:", geoError);
-                setError("Location permission is required for groundwater prediction.");
-                setIsLoading(false);
+                console.warn("Geolocation warning:", geoError);
+                // Fall back to default location instead of locking user out with error screen
+                setLocationCoords({ latitude: defaultLat, longitude: defaultLng });
+                fetchAllData(defaultLat, defaultLng);
             },
-            { enableHighAccuracy: true, timeout: 15000, maximumAge: 10000 }
+            { enableHighAccuracy: true, timeout: 8000, maximumAge: 10000 }
         );
     };
 
@@ -99,16 +136,13 @@ function Prediction({ onDataLoaded }) {
     if (!isLoading && error) {
         return (
             <div className="max-w-7xl mx-auto px-6 py-12 lg:px-8 flex flex-col items-center justify-center min-h-[60vh]">
-                <div className="card-surface p-8 max-w-md w-full bg-red-50/50 border border-red-100 flex flex-col items-center text-center">
-                    <div className="h-12 w-12 rounded-full bg-red-100 flex items-center justify-center text-red-600 mb-4">
-                        <FiAlertTriangle className="h-6 w-6" />
-                    </div>
-                    <h3 className="text-base font-bold text-slate-900 mb-2">System Alert</h3>
-                    <p className="text-sm text-slate-600 mb-6">{error}</p>
-                    <button onClick={runAutomaticDetection} className="btn-primary">
-                        Retry Connection
-                    </button>
-                </div>
+                <SystemAlertCard 
+                    error={error}
+                    onRetry={runAutomaticDetection}
+                    onEnableDemoMode={() => handleEnableDemoMode(locationCoords.latitude || 13.0827, locationCoords.longitude || 80.2707)}
+                    onManualLocationSubmit={handleManualLocationSubmit}
+                    isRetrying={isLoading}
+                />
             </div>
         );
     }
@@ -125,6 +159,32 @@ function Prediction({ onDataLoaded }) {
                     Monitor groundwater conditions, view prediction results, analyze historical trends, and receive recommendations for efficient water resource management.
                 </p>
             </div>
+
+            {/* Offline / Demo Mode Warning Banner */}
+            {predictionData?.is_demo && (
+                <div className="bg-amber-50 border border-amber-200/90 rounded-xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-left shadow-sm">
+                    <div className="flex items-center gap-3">
+                        <div className="p-2 bg-amber-100 rounded-lg text-amber-700 font-bold shrink-0">
+                            <FiAlertTriangle className="h-5 w-5" />
+                        </div>
+                        <div>
+                            <h4 className="text-xs font-bold text-amber-900 flex items-center gap-2">
+                                System Notice: Demo / Offline Mode Active
+                            </h4>
+                            <p className="text-[11px] text-amber-800 mt-0.5">
+                                Displaying offline simulated telemetry. Start the backend FastAPI server (<code className="bg-amber-100/80 px-1 py-0.5 rounded font-mono text-amber-900">http://127.0.0.1:8000</code>) for live ML predictions.
+                            </p>
+                        </div>
+                    </div>
+                    <button 
+                        onClick={runAutomaticDetection} 
+                        className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold rounded-lg shrink-0 flex items-center gap-1.5 shadow-sm transition-colors"
+                    >
+                        <FiRefreshCw className="h-3.5 w-3.5" />
+                        Reconnect Live Server
+                    </button>
+                </div>
+            )}
 
             {isLoading ? (
                 <div className="flex items-center justify-center min-h-[40vh]">
