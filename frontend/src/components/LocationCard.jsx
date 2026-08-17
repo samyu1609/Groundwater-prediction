@@ -10,6 +10,9 @@ function LocationCard({ latitude, longitude, location }) {
     const state = location?.state ?? "Tamil Nadu";
     const district = location?.district ?? "Coimbatore";
 
+    const latStr = typeof latitude === "number" && !isNaN(latitude) ? `${latitude.toFixed(5)}° N` : "Detecting...";
+    const lngStr = typeof longitude === "number" && !isNaN(longitude) ? `${longitude.toFixed(5)}° E` : "Detecting...";
+
     return (
         <div className="card-surface p-6 card-surface-hover text-left">
             <div className="flex items-center gap-2.5 text-[#0F4C81] mb-4">
@@ -34,7 +37,7 @@ function LocationCard({ latitude, longitude, location }) {
                         Latitude
                     </span>
                     <span className="text-lg font-semibold text-slate-800">
-                        {latitude !== null && latitude !== undefined ? `${latitude.toFixed(5)}° N` : "Detecting..."}
+                        {latStr}
                     </span>
                 </div>
                 <div>
@@ -42,7 +45,7 @@ function LocationCard({ latitude, longitude, location }) {
                         Longitude
                     </span>
                     <span className="text-lg font-semibold text-slate-800">
-                        {longitude !== null && longitude !== undefined ? `${longitude.toFixed(5)}° E` : "Detecting..."}
+                        {lngStr}
                     </span>
                 </div>
                 <div className="pt-2 border-t border-slate-100">

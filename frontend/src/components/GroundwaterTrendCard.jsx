@@ -8,7 +8,7 @@ const RISK_STYLES = {
 };
 
 function ChangeArrow({ change }) {
-    if (change === 0) return <FiMinus className="h-3.5 w-3.5 text-slate-400" />;
+    if (!change || change === 0) return <FiMinus className="h-3.5 w-3.5 text-slate-400" />;
     if (change > 0)  return <FiTrendingDown className="h-3.5 w-3.5 text-rose-500" title="Depth increasing" />;
     return <FiTrendingUp className="h-3.5 w-3.5 text-emerald-500" title="Depth decreasing" />;
 }
@@ -16,7 +16,7 @@ function ChangeArrow({ change }) {
 function GroundwaterTrendCard({ trend = [], currentLevel, rainfallRecommendation, hasRainfall }) {
     const [hoveredIdx, setHoveredIdx] = useState(null);
 
-    if (!trend.length) return null;
+    if (!Array.isArray(trend) || !trend.length) return null;
 
     // SVG chart dimensions
     const W = 560, H = 200;
@@ -24,16 +24,17 @@ function GroundwaterTrendCard({ trend = [], currentLevel, rainfallRecommendation
     const cw = W - PL - PR;
     const ch = H - PT - PB;
 
-    const levels = trend.map(d => d.groundwater_level);
+    const levels = trend.map(d => typeof d.groundwater_level === "number" && !isNaN(d.groundwater_level) ? d.groundwater_level : 6.80);
     const minL = Math.max(0, Math.min(...levels) - 0.5);
     const maxL = Math.max(...levels) + 0.5;
 
-    const getX = (i) => PL + (i / (trend.length - 1)) * cw;
-    const getY = (v) => PT + (1 - (v - minL) / (maxL - minL)) * ch;
+    const getX = (i) => PL + (i / Math.max(1, trend.length - 1)) * cw;
+    const getY = (v) => PT + (1 - (v - minL) / Math.max(0.1, maxL - minL)) * ch;
 
     let linePath = "";
     trend.forEach((d, i) => {
-        const x = getX(i), y = getY(d.groundwater_level);
+        const val = typeof d.groundwater_level === "number" && !isNaN(d.groundwater_level) ? d.groundwater_level : 6.80;
+        const x = getX(i), y = getY(val);
         linePath += i === 0 ? `M ${x} ${y}` : ` L ${x} ${y}`;
     });
 
@@ -42,8 +43,10 @@ function GroundwaterTrendCard({ trend = [], currentLevel, rainfallRecommendation
     const bottomY = PT + ch;
     const areaPath = `${linePath} L ${lastX} ${bottomY} L ${firstX} ${bottomY} Z`;
 
+    const safeCurrent = typeof currentLevel === "number" && !isNaN(currentLevel) ? currentLevel.toFixed(2) : null;
+
     return (
-        <div className="card-surface p-6 space-y-6">
+        <div className="card-surface p-6 space-y-6 text-left">
             {/* Header */}
             <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2.5 text-blue-600">
@@ -52,9 +55,9 @@ function GroundwaterTrendCard({ trend = [], currentLevel, rainfallRecommendation
                         Groundwater Trend — Next 7 Days
                     </h3>
                 </div>
-                {currentLevel !== undefined && (
+                {safeCurrent !== null && (
                     <span className="text-xs font-semibold text-slate-400">
-                        Current: <span className="text-slate-700">{currentLevel?.toFixed(2)} m</span>
+                        Current: <span className="text-slate-700">{safeCurrent} m</span>
                     </span>
                 )}
             </div>
@@ -90,7 +93,10 @@ function GroundwaterTrendCard({ trend = [], currentLevel, rainfallRecommendation
 
                     {/* Data points + tooltips */}
                     {trend.map((d, i) => {
-                        const x = getX(i), y = getY(d.groundwater_level);
+                        const val = typeof d.groundwater_level === "number" && !isNaN(d.groundwater_level) ? d.groundwater_level : 6.80;
+                        const conf = typeof d.confidence === "number" && !isNaN(d.confidence) ? d.confidence : 75;
+                        const dayLabel = d.day_label || d.day || `Day ${i + 1}`;
+                        const x = getX(i), y = getY(val);
                         const isHovered = hoveredIdx === i;
                         const rs = RISK_STYLES[d.risk] ?? RISK_STYLES.Safe;
                         return (
@@ -108,16 +114,16 @@ function GroundwaterTrendCard({ trend = [], currentLevel, rainfallRecommendation
                                         <rect x={x - 42} y={y - 40} width="84" height="30"
                                             rx="6" fill="#1e293b" opacity="0.92" />
                                         <text x={x} y={y - 28} textAnchor="middle" fontSize="9.5" fill="#fff" fontWeight="700">
-                                            {d.groundwater_level.toFixed(2)} m · {d.risk}
+                                            {val.toFixed(2)} m · {d.risk || "Safe"}
                                         </text>
                                         <text x={x} y={y - 16} textAnchor="middle" fontSize="8.5" fill="#94a3b8">
-                                            Conf: {d.confidence}%
+                                            Conf: {conf}%
                                         </text>
                                     </g>
                                 )}
                                 {/* X-axis day label */}
                                 <text x={x} y={H - 4} textAnchor="middle" fontSize="9" fill="#64748b" fontWeight="600">
-                                    {d.day_label === "Today" ? "Today" : d.day_label.slice(0, 3)}
+                                    {dayLabel === "Today" ? "Today" : dayLabel.slice(0, 3)}
                                 </text>
                             </g>
                         );
@@ -139,6 +145,10 @@ function GroundwaterTrendCard({ trend = [], currentLevel, rainfallRecommendation
                     </thead>
                     <tbody>
                         {trend.map((d, i) => {
+                            const val = typeof d.groundwater_level === "number" && !isNaN(d.groundwater_level) ? d.groundwater_level : 6.80;
+                            const change = typeof d.daily_change === "number" && !isNaN(d.daily_change) ? d.daily_change : 0.0;
+                            const conf = typeof d.confidence === "number" && !isNaN(d.confidence) ? d.confidence : 75;
+                            const dayLabel = d.day_label || d.day || `Day ${i + 1}`;
                             const rs = RISK_STYLES[d.risk] ?? RISK_STYLES.Safe;
                             return (
                                 <tr key={i}
@@ -148,7 +158,7 @@ function GroundwaterTrendCard({ trend = [], currentLevel, rainfallRecommendation
                                     onMouseEnter={() => setHoveredIdx(i)}
                                     onMouseLeave={() => setHoveredIdx(null)}>
                                     <td className="px-4 py-2.5 font-bold text-slate-700">
-                                        {d.day_label}
+                                        {dayLabel}
                                         {i === 0 && (
                                             <span className="ml-2 text-[9px] bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded font-bold uppercase">
                                                 Current
@@ -156,25 +166,25 @@ function GroundwaterTrendCard({ trend = [], currentLevel, rainfallRecommendation
                                         )}
                                     </td>
                                     <td className="px-4 py-2.5 text-right font-bold text-slate-800">
-                                        {d.groundwater_level.toFixed(2)} m
+                                        {val.toFixed(2)} m
                                     </td>
                                     <td className="px-4 py-2.5 text-right">
                                         <span className="inline-flex items-center justify-end gap-1 font-semibold text-slate-600">
-                                            <ChangeArrow change={d.daily_change} />
+                                            <ChangeArrow change={change} />
                                             {i === 0 ? "—" : (
-                                                <span className={d.daily_change >= 0 ? "text-rose-500" : "text-emerald-600"}>
-                                                    {d.daily_change >= 0 ? "+" : ""}{d.daily_change.toFixed(2)} m
+                                                <span className={change >= 0 ? "text-rose-500" : "text-emerald-600"}>
+                                                    {change >= 0 ? "+" : ""}{change.toFixed(2)} m
                                                 </span>
                                             )}
                                         </span>
                                     </td>
                                     <td className="px-4 py-2.5 text-right font-semibold text-slate-600">
-                                        {d.confidence}%
+                                        {conf}%
                                     </td>
                                     <td className="px-4 py-2.5 text-right">
                                         <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-[10px] font-bold ${rs.badge}`}>
                                             <span className={`h-1.5 w-1.5 rounded-full ${rs.dot}`}></span>
-                                            {d.risk}
+                                            {d.risk || "Safe"}
                                         </span>
                                     </td>
                                 </tr>

@@ -123,13 +123,22 @@ function Prediction({ onDataLoaded }) {
         runAutomaticDetection();
     }, []);
 
-    // Local variables
-    const currentLevel = predictionData?.groundwater_level ?? 6.80;
-    const confidence = predictionData?.confidence ?? 95.2;
-    const trend = forecastData?.groundwater_trend ?? [];
-    const weatherForecast = forecastData?.weather_forecast ?? [];
-    const level7d = trend.length ? trend[trend.length - 1]?.groundwater_level : 6.42;
-    const level30d = predictionData?.groundwater_level ? +(predictionData.groundwater_level - 0.70).toFixed(2) : 6.10;
+    // Local variables with type safety guards
+    const currentLevel = typeof predictionData?.groundwater_level === "number" && !isNaN(predictionData.groundwater_level)
+        ? predictionData.groundwater_level
+        : 6.80;
+    const confidence = typeof predictionData?.confidence === "number" && !isNaN(predictionData.confidence)
+        ? predictionData.confidence
+        : 95.2;
+    const trend = Array.isArray(forecastData?.groundwater_trend) ? forecastData.groundwater_trend : [];
+    const weatherForecast = Array.isArray(forecastData?.weather_forecast) ? forecastData.weather_forecast : [];
+    
+    const raw7d = trend.length && typeof trend[trend.length - 1]?.groundwater_level === "number"
+        ? trend[trend.length - 1].groundwater_level
+        : (typeof predictionData?.groundwater_level === "number" ? predictionData.groundwater_level - 0.38 : 6.42);
+    
+    const level7d = typeof raw7d === "number" && !isNaN(raw7d) ? raw7d : 6.42;
+    const level30d = +(currentLevel + (level7d - currentLevel) * 4).toFixed(2);
     const expectedChange = +(level30d - currentLevel).toFixed(2);
     const predictionDate = predictionData?.last_updated ?? new Date().toISOString().slice(0, 10);
 
