@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { FiTrendingDown } from "react-icons/fi";
+import { FiTrendingDown, FiActivity } from "react-icons/fi";
 
 function Home() {
     return (
@@ -25,13 +25,16 @@ function Home() {
                     Monitor groundwater conditions, view prediction results, analyze historical trends, and receive recommended actions for efficient water resource management.
                 </p>
                 
-                {/* Start Button */}
-                <Link 
-                    to="/prediction" 
-                    className="btn-primary px-8 py-3 text-sm rounded-lg font-bold shadow-sm transition-transform duration-150 active:scale-[0.98]"
-                >
-                    Launch Dashboard
-                </Link>
+                {/* Action Buttons */}
+                <div className="flex flex-col sm:flex-row items-center gap-4">
+                    <Link 
+                        to="/prediction" 
+                        className="btn-primary px-8 py-3 text-sm rounded-lg font-bold shadow-sm transition-transform duration-150 active:scale-[0.98] flex items-center gap-2"
+                    >
+                        <FiActivity className="h-4 w-4" />
+                        <span>Launch AI Predictor</span>
+                    </Link>
+                </div>
             </div>
         </div>
     );

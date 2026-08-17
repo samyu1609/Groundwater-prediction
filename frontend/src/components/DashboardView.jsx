@@ -30,10 +30,14 @@ function DashboardView({ predictionData, forecastData }) {
 
     // Forecast projection from backend trend
     const trend = forecastData?.groundwater_trend ?? [];
-    const level7d = trend.length ? trend[trend.length - 1]?.groundwater_level : (predictionData?.groundwater_level ? +(predictionData.groundwater_level - 0.38).toFixed(2) : 6.42);
-    const predictedLevel = trend.length > 1 ? trend[1]?.groundwater_level : (predictionData?.groundwater_level ? +(predictionData.groundwater_level - 0.45).toFixed(2) : 6.35);
-    const level30d = +(currentLevel + (level7d - currentLevel) * 4).toFixed(2);
-    const expectedChange = +(level30d - currentLevel).toFixed(2);
+    const rawLevel7d = trend.length ? trend[trend.length - 1]?.groundwater_level : (predictionData?.groundwater_level ? +(predictionData.groundwater_level - 0.38).toFixed(2) : 6.42);
+    const rawPredicted = trend.length > 1 ? trend[1]?.groundwater_level : (predictionData?.groundwater_level ? +(predictionData.groundwater_level - 0.45).toFixed(2) : 6.35);
+
+    const safeCurrent = typeof currentLevel === "number" && !isNaN(currentLevel) ? currentLevel : 6.80;
+    const level7d = typeof rawLevel7d === "number" && !isNaN(rawLevel7d) ? rawLevel7d : 6.42;
+    const predictedLevel = typeof rawPredicted === "number" && !isNaN(rawPredicted) ? rawPredicted : 6.35;
+    const level30d = +(safeCurrent + (level7d - safeCurrent) * 4).toFixed(2);
+    const expectedChange = +(level30d - safeCurrent).toFixed(2);
 
     const activeConfig = STATUS_CONFIG[risk] ?? STATUS_CONFIG.Moderate;
 

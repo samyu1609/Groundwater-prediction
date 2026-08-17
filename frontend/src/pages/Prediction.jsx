@@ -19,7 +19,7 @@ import {
 
 const TABS = [
     { id: "dashboard",   label: "Dashboard",          icon: FiLayout },
-    { id: "prediction",  label: "Prediction",         icon: FiActivity },
+    { id: "prediction",  label: "AI Predictor",       icon: FiActivity },
     { id: "trends",      label: "Groundwater Trends", icon: FiTrendingDown },
     { id: "weather",     label: "Weather Forecast",   icon: FiCloud },
     { id: "recs",        label: "Recommendations",    icon: FiInfo },
@@ -221,7 +221,7 @@ function Prediction({ onDataLoaded }) {
                         
                         {/* 1. Dashboard View */}
                         {activeTab === "dashboard" && (
-                            <DashboardView predictionData={predictionData} />
+                            <DashboardView predictionData={predictionData} forecastData={forecastData} />
                         )}
 
                         {/* 2. Prediction View */}

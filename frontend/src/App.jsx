@@ -8,7 +8,11 @@ function App() {
   const [navLocation, setNavLocation] = useState(null);
   const [weatherCondition, setWeatherCondition] = useState(null);
 
-  // App container
+  const handleDataLoaded = (loc, cond) => {
+    setNavLocation(loc);
+    setWeatherCondition(cond);
+  };
+
   return (
     <BrowserRouter>
       <div className="min-h-screen bg-[#F3F4F6] text-slate-800 flex flex-col justify-between">
@@ -19,17 +23,12 @@ function App() {
           <main>
             <Routes>
               <Route path="/" element={<Home />} />
-              <Route 
-                path="/prediction" 
-                element={
-                  <Prediction 
-                    onDataLoaded={(loc, cond) => {
-                      setNavLocation(loc);
-                      setWeatherCondition(cond);
-                    }} 
-                  />
-                } 
-              />
+              <Route path="/prediction text-left" element={<Prediction onDataLoaded={handleDataLoaded} />} />
+              <Route path="/prediction" element={<Prediction onDataLoaded={handleDataLoaded} />} />
+              <Route path="/ai-predictor" element={<Prediction onDataLoaded={handleDataLoaded} />} />
+              <Route path="/predictor" element={<Prediction onDataLoaded={handleDataLoaded} />} />
+              <Route path="/predict" element={<Prediction onDataLoaded={handleDataLoaded} />} />
+              <Route path="*" element={<Prediction onDataLoaded={handleDataLoaded} />} />
             </Routes>
           </main>
         </div>
