@@ -23,7 +23,6 @@ function App() {
           <main>
             <Routes>
               <Route path="/" element={<Home />} />
-              <Route path="/prediction text-left" element={<Prediction onDataLoaded={handleDataLoaded} />} />
               <Route path="/prediction" element={<Prediction onDataLoaded={handleDataLoaded} />} />
               <Route path="/ai-predictor" element={<Prediction onDataLoaded={handleDataLoaded} />} />
               <Route path="/predictor" element={<Prediction onDataLoaded={handleDataLoaded} />} />
