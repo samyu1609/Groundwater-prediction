@@ -1,13 +1,14 @@
 import { FiInfo } from "react-icons/fi";
 
-function RecommendationCard() {
-    const recommendedActions = [
+function RecommendationCard({ recommendations }) {
+    const defaultActions = [
+        "Harvest rainwater frequently.",
         "Use drip irrigation where suitable.",
         "Avoid excessive groundwater extraction.",
-        "Store rainwater during the rainy season.",
         "Monitor groundwater levels regularly.",
         "Use water efficiently during low rainfall periods."
     ];
+    const actions = (recommendations && recommendations.length > 0) ? recommendations : defaultActions;
 
     return (
         <div className="card-surface p-6 card-surface-hover">
@@ -20,7 +21,7 @@ function RecommendationCard() {
             
             <div className="py-2">
                 <ul className="space-y-3">
-                    {recommendedActions.map((action, index) => (
+                    {actions.map((action, index) => (
                         <li key={index} className="flex items-start gap-2.5 text-sm font-semibold text-slate-700 leading-relaxed">
                             <span className="text-[#0F4C81] mt-1 select-none font-extrabold">•</span>
                             <span>{action}</span>

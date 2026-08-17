@@ -8,7 +8,7 @@ const STATUS_CONFIG = {
     Critical: { label: "Critical", color: "bg-rose-600",    badge: "bg-rose-50 text-rose-800 border-rose-100",     desc: "Groundwater level is critical. Immediate reduction in usage required." },
 };
 
-function DashboardView({ predictionData }) {
+function DashboardView({ predictionData, forecastData }) {
     // Current Location parameters
     const lat = predictionData?.location?.latitude ?? 11.0168;
     const lng = predictionData?.location?.longitude ?? 76.9558;
@@ -25,13 +25,14 @@ function DashboardView({ predictionData }) {
 
     // Groundwater parameters
     const currentLevel = predictionData?.groundwater_level ?? 6.80;
-    const predictedLevel = (predictionData?.groundwater_level ? +(predictionData.groundwater_level - 0.45).toFixed(2) : 6.35);
     const confidence = predictionData?.confidence ?? 95.2;
     const risk = predictionData?.risk ?? "Moderate";
 
-    // Forecast projection
-    const level7d = (predictionData?.groundwater_level ? +(predictionData.groundwater_level - 0.38).toFixed(2) : 6.42);
-    const level30d = (predictionData?.groundwater_level ? +(predictionData.groundwater_level - 0.70).toFixed(2) : 6.10);
+    // Forecast projection from backend trend
+    const trend = forecastData?.groundwater_trend ?? [];
+    const level7d = trend.length ? trend[trend.length - 1]?.groundwater_level : (predictionData?.groundwater_level ? +(predictionData.groundwater_level - 0.38).toFixed(2) : 6.42);
+    const predictedLevel = trend.length > 1 ? trend[1]?.groundwater_level : (predictionData?.groundwater_level ? +(predictionData.groundwater_level - 0.45).toFixed(2) : 6.35);
+    const level30d = +(currentLevel + (level7d - currentLevel) * 4).toFixed(2);
     const expectedChange = +(level30d - currentLevel).toFixed(2);
 
     const activeConfig = STATUS_CONFIG[risk] ?? STATUS_CONFIG.Moderate;

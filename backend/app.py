@@ -1,6 +1,7 @@
 from datetime import date
 from pathlib import Path
 from typing import Optional
+from concurrent.futures import ThreadPoolExecutor
 from fastapi import FastAPI, HTTPException, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
@@ -38,6 +39,8 @@ except ModuleNotFoundError:
 BASE_DIR = Path(__file__).resolve().parent
 UPLOAD_DIR = BASE_DIR.parent / "uploads"
 UPLOAD_DIR.mkdir(exist_ok=True)
+
+executor = ThreadPoolExecutor(max_workers=4)
 
 app = FastAPI(title="AquaSense AI", version="1.0")
 origins = [
@@ -83,7 +86,16 @@ def predict(request: PredictionRequest):
     try:
         year = request.year or date.today().year
         month = request.month or date.today().month
-        weather = fetch_weather(request.latitude, request.longitude, request.date.isoformat() if request.date else None)
+        req_date = request.date.isoformat() if request.date else None
+
+        f_weather = executor.submit(fetch_weather, request.latitude, request.longitude, req_date)
+        f_geocode = executor.submit(reverse_geocode, request.latitude, request.longitude)
+        f_history = executor.submit(get_location_history, request.latitude, request.longitude, 6)
+
+        weather = f_weather.result()
+        location_info = f_geocode.result()
+        history = f_history.result()
+
         raw_features = {
             "LATITUDE": request.latitude,
             "LONGITUDE": request.longitude,
@@ -96,9 +108,7 @@ def predict(request: PredictionRequest):
         groundwater_value, confidence = predict_groundwater(raw_features)
         risk_label, risk_color = classify_risk(groundwater_value)
         recommendations = get_recommendations(risk_label)
-        location_info = reverse_geocode(request.latitude, request.longitude)
         weather_condition = get_weather_condition(weather["temperature_c"], weather["humidity_pct"], weather["rainfall_mm"])
-        history = get_location_history(request.latitude, request.longitude, months=6)
 
         return {
             "groundwater_level": round(groundwater_value, 2),

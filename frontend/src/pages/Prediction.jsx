@@ -263,7 +263,7 @@ function Prediction({ onDataLoaded }) {
 
                                 {/* Detail KPI layout */}
                                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                                    <LocationCard latitude={locationCoords.latitude} longitude={locationCoords.longitude} />
+                                    <LocationCard latitude={locationCoords.latitude} longitude={locationCoords.longitude} location={predictionData?.location} />
                                     <WeatherCard
                                         rainfall={predictionData?.weather?.rainfall}
                                         temperature={predictionData?.weather?.temperature}
@@ -271,7 +271,7 @@ function Prediction({ onDataLoaded }) {
                                     />
                                     <PredictionCard groundwaterLevel={currentLevel} />
                                     <StatusCard risk={predictionData?.risk} />
-                                    <RecommendationCard />
+                                    <RecommendationCard recommendations={predictionData?.recommendations} />
                                     <ModelInfoCard />
                                 </div>
                             </div>
@@ -298,7 +298,7 @@ function Prediction({ onDataLoaded }) {
                         {/* 5. Recommendations View */}
                         {activeTab === "recs" && (
                             <div className="max-w-2xl mx-auto space-y-6 text-left">
-                                <RecommendationCard />
+                                <RecommendationCard recommendations={predictionData?.recommendations} />
                                 {forecastData?.rainfall_recommendation && (
                                     <div className={`card-surface p-6 border ${
                                         forecastData.has_rainfall

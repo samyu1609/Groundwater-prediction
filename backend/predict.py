@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, date as date_cls
 from pathlib import Path
 import json
 import urllib.request
@@ -14,8 +14,19 @@ MODEL_CANDIDATES = [
     BASE_DIR / "models" / "random_forest.pkl",
     BASE_DIR / "models" / "xgboost.pkl",
 ]
+
 WEATHER_CACHE = {}
 WEATHER_CACHE_TTL = timedelta(minutes=15)
+
+FORECAST_CACHE = {}
+FORECAST_CACHE_TTL = timedelta(minutes=30)
+
+REVERSE_GEOCODE_CACHE = {}
+REVERSE_GEOCODE_CACHE_TTL = timedelta(hours=1)
+
+LOCATION_HISTORY_CACHE = {}
+LOCATION_HISTORY_CACHE_TTL = timedelta(hours=1)
+
 MODEL = None
 DATA_DF = None
 
@@ -63,7 +74,8 @@ def prepare_feature_dataframe(latitude, longitude, year, month, rainfall_mm, tem
 def compute_confidence(model, df, prediction):
     try:
         if hasattr(model, "estimators_") and getattr(model, "estimators_"):
-            tree_preds = np.array([tree.predict(df)[0] for tree in model.estimators_])
+            X_arr = df.to_numpy() if isinstance(df, pd.DataFrame) else np.asarray(df)
+            tree_preds = np.array([tree.predict(X_arr)[0] for tree in model.estimators_])
             std = float(np.std(tree_preds))
             if std <= 0:
                 return 98.5
@@ -92,26 +104,26 @@ def predict_groundwater(raw_features):
 
 
 def fetch_weather(latitude, longitude, date=None):
-    cache_key = f"{round(latitude, 5)}_{round(longitude, 5)}"
+    cache_key = f"{round(latitude, 4)}_{round(longitude, 4)}"
     cached = WEATHER_CACHE.get(cache_key)
     now = datetime.utcnow()
     if cached and cached["expires_at"] > now:
         return cached["weather"]
 
-    date = date or now.date().isoformat()
+    req_date = date or now.date().isoformat()
     params = {
         "latitude": latitude,
         "longitude": longitude,
         "hourly": "temperature_2m,relativehumidity_2m,windspeed_10m",
         "daily": "rain_sum",
         "timezone": "auto",
-        "start_date": date,
-        "end_date": date,
+        "start_date": req_date,
+        "end_date": req_date,
     }
     url = f"https://api.open-meteo.com/v1/forecast?{urllib.parse.urlencode(params)}"
     request = urllib.request.Request(url, headers={"User-Agent": "AquaSenseAI/1.0"})
     try:
-        with urllib.request.urlopen(request, timeout=10) as response:
+        with urllib.request.urlopen(request, timeout=5) as response:
             raw = response.read()
     except Exception:
         return {
@@ -129,7 +141,7 @@ def fetch_weather(latitude, longitude, date=None):
     wind_series = hourly.get("windspeed_10m", [])
     rainfall_value = float(daily.get("rain_sum", [0])[0] or 0)
     if times and temp_series and humidity_series:
-        values = [i for i, t in enumerate(times) if t.startswith(date)]
+        values = [i for i, t in enumerate(times) if t.startswith(req_date)]
         if values:
             temperature = float(np.mean([temp_series[i] for i in values]))
             humidity = float(np.mean([humidity_series[i] for i in values]))
@@ -152,21 +164,16 @@ def fetch_weather(latitude, longitude, date=None):
     return weather
 
 
-FORECAST_CACHE = {}
-FORECAST_CACHE_TTL = timedelta(minutes=30)
-
-
 def fetch_7day_forecast(latitude, longitude):
     """Fetch 7-day hourly forecast from Open-Meteo and aggregate to daily values."""
-    from datetime import date, timedelta as td
     cache_key = f"forecast_{round(latitude, 4)}_{round(longitude, 4)}"
     cached = FORECAST_CACHE.get(cache_key)
     now = datetime.utcnow()
     if cached and cached["expires_at"] > now:
         return cached["forecast"]
 
-    today = date.today()
-    end_date = today + td(days=6)
+    today = date_cls.today()
+    end_date = today + timedelta(days=6)
 
     params = {
         "latitude": latitude,
@@ -180,7 +187,7 @@ def fetch_7day_forecast(latitude, longitude):
     url = f"https://api.open-meteo.com/v1/forecast?{urllib.parse.urlencode(params)}"
     req = urllib.request.Request(url, headers={"User-Agent": "AquaSenseAI/1.0"})
     try:
-        with urllib.request.urlopen(req, timeout=12) as response:
+        with urllib.request.urlopen(req, timeout=5) as response:
             payload = json.loads(response.read())
     except Exception:
         return []
@@ -199,7 +206,6 @@ def fetch_7day_forecast(latitude, longitude):
 
     for idx, day_str in enumerate(daily_dates):
         rain = float(rain_sums[idx] or 0) if idx < len(rain_sums) else 0.0
-        # Aggregate hourly values for this specific day
         day_indices = [i for i, t in enumerate(times) if t.startswith(day_str)]
         if day_indices:
             temps = [temp_series[i] for i in day_indices if i < len(temp_series)]
@@ -211,7 +217,6 @@ def fetch_7day_forecast(latitude, longitude):
         else:
             temp, humidity, wind = 28.0, 60.0, 12.0
 
-        from datetime import date as date_cls
         day_date = date_cls.fromisoformat(day_str)
         day_label = "Today" if idx == 0 else day_names[day_date.weekday()]
 
@@ -231,40 +236,58 @@ def fetch_7day_forecast(latitude, longitude):
 
 def predict_7day_groundwater(latitude, longitude, forecast_days):
     """Run the trained ML model on each forecast day's climate data to produce a groundwater trend."""
-    from datetime import date
-    now = date.today()
+    if not forecast_days:
+        return []
+
+    model = load_model()
+    columns = get_feature_names(model)
+
+    rows = []
+    for day in forecast_days:
+        day_date = date_cls.fromisoformat(day["date"])
+        rows.append({
+            "LATITUDE": float(latitude),
+            "LONGITUDE": float(longitude),
+            "YEAR_x": int(day_date.year),
+            "MONTH": int(day_date.month),
+            "Rainfall_NASA": float(day["rainfall_mm"]),
+            "Temperature_NASA": float(day["temperature_c"]),
+            "Humidity_NASA": float(day["humidity_pct"]),
+        })
+
+    df_batch = pd.DataFrame(rows, columns=columns)
+    predictions = model.predict(df_batch)
+
+    confidences = []
+    if hasattr(model, "estimators_") and getattr(model, "estimators_"):
+        X_arr = df_batch.to_numpy()
+        tree_preds = np.array([tree.predict(X_arr) for tree in model.estimators_])
+        stds = np.std(tree_preds, axis=0)
+        for i, pred in enumerate(predictions):
+            std = float(stds[i])
+            if std <= 0:
+                confidences.append(98.5)
+            else:
+                ratio = std / (abs(pred) + 1e-3)
+                score = 100.0 - min(80.0, ratio * 30.0)
+                confidences.append(float(max(40.0, min(99.5, score))))
+    else:
+        confidences = [75.0] * len(predictions)
+
     trend = []
     prev_level = None
-
     for idx, day in enumerate(forecast_days):
-        day_date_str = day["date"]
-        from datetime import date as date_cls
-        day_date = date_cls.fromisoformat(day_date_str)
-        raw_features = {
-            "LATITUDE": latitude,
-            "LONGITUDE": longitude,
-            "YEAR_x": day_date.year,
-            "MONTH": day_date.month,
-            "Rainfall_NASA": day["rainfall_mm"],
-            "Temperature_NASA": day["temperature_c"],
-            "Humidity_NASA": day["humidity_pct"],
-        }
-        try:
-            level, confidence = predict_groundwater(raw_features)
-        except Exception:
-            level = prev_level if prev_level is not None else 6.80
-            confidence = 75.0
-
-        level = round(level, 2)
+        level = round(float(predictions[idx]), 2)
+        confidence = round(float(confidences[idx]), 1)
         daily_change = round(level - prev_level, 2) if prev_level is not None else 0.0
         risk_label, _ = classify_risk(level)
         trend.append({
-            "date": day_date_str,
+            "date": day["date"],
             "day_label": day["day_label"],
             "groundwater_level": level,
             "daily_change": daily_change,
             "risk": risk_label,
-            "confidence": round(confidence, 1),
+            "confidence": confidence,
         })
         prev_level = level
 
@@ -272,6 +295,12 @@ def predict_7day_groundwater(latitude, longitude, forecast_days):
 
 
 def reverse_geocode(latitude, longitude):
+    cache_key = f"{round(latitude, 3)}_{round(longitude, 3)}"
+    cached = REVERSE_GEOCODE_CACHE.get(cache_key)
+    now = datetime.utcnow()
+    if cached and cached["expires_at"] > now:
+        return cached["result"]
+
     params = {
         "format": "jsonv2",
         "lat": latitude,
@@ -282,22 +311,26 @@ def reverse_geocode(latitude, longitude):
     url = f"https://nominatim.openstreetmap.org/reverse?{urllib.parse.urlencode(params)}"
     request = urllib.request.Request(url, headers={"User-Agent": "AquaSenseAI/1.0"})
     try:
-        with urllib.request.urlopen(request, timeout=10) as response:
+        with urllib.request.urlopen(request, timeout=3) as response:
             payload = json.loads(response.read())
     except Exception:
-        return {
+        fallback = {
             "state": "Unknown",
             "district": "Unknown",
             "village": "Unknown",
             "display_name": None,
         }
+        return fallback
+
     address = payload.get("address", {})
-    return {
+    result = {
         "state": address.get("state") or address.get("region") or "Unknown",
         "district": address.get("county") or address.get("district") or "Unknown",
         "village": address.get("village") or address.get("town") or address.get("city") or "Unknown",
         "display_name": address.get("display_name"),
     }
+    REVERSE_GEOCODE_CACHE[cache_key] = {"result": result, "expires_at": now + REVERSE_GEOCODE_CACHE_TTL}
+    return result
 
 
 def get_weather_condition(temperature_c, humidity_pct, rainfall_mm):
@@ -313,9 +346,9 @@ def get_weather_condition(temperature_c, humidity_pct, rainfall_mm):
 
 
 def classify_risk(groundwater_level):
-    if groundwater_level < 5:
+    if groundwater_level > 10.0:
         return "Critical", "#dc2626"
-    if groundwater_level <= 10:
+    if groundwater_level > 5.0:
         return "Moderate", "#f59e0b"
     return "Safe", "#10b981"
 
@@ -347,31 +380,41 @@ def load_history_data():
         return DATA_DF
     history_path = BASE_DIR.parent / "data" / "processed" / "final_dataset.csv"
     if history_path.exists():
-        DATA_DF = pd.read_csv(history_path)
+        df = pd.read_csv(history_path)
+        required_columns = ["LATITUDE", "LONGITUDE", "YEAR_x", "MONTH", "WATER_LEVEL_MBGL", "Rainfall_NASA"]
+        if set(required_columns).issubset(df.columns):
+            df = df.dropna(subset=required_columns).copy()
+            df["LATITUDE"] = df["LATITUDE"].astype(float)
+            df["LONGITUDE"] = df["LONGITUDE"].astype(float)
+            df["YEAR_x"] = df["YEAR_x"].astype(int)
+            df["MONTH"] = df["MONTH"].astype(int)
+            df["WATER_LEVEL_MBGL"] = df["WATER_LEVEL_MBGL"].astype(float)
+            df["Rainfall_NASA"] = df["Rainfall_NASA"].astype(float)
+            df["date"] = pd.to_datetime(df["YEAR_x"].astype(str) + "-" + df["MONTH"].astype(str) + "-01", errors="coerce")
+            DATA_DF = df
+        else:
+            DATA_DF = pd.DataFrame()
     else:
         DATA_DF = pd.DataFrame()
     return DATA_DF
 
 
 def get_location_history(latitude, longitude, months=6):
+    cache_key = f"{round(latitude, 3)}_{round(longitude, 3)}_{months}"
+    cached = LOCATION_HISTORY_CACHE.get(cache_key)
+    now = datetime.utcnow()
+    if cached and cached["expires_at"] > now:
+        return cached["result"]
+
     df = load_history_data()
     if df.empty:
         return []
-    required_columns = ["LATITUDE", "LONGITUDE", "YEAR_x", "MONTH", "WATER_LEVEL_MBGL", "Rainfall_NASA"]
-    if not set(required_columns).issubset(df.columns):
-        return []
-    df = df.dropna(subset=required_columns).copy()
-    df["LATITUDE"] = df["LATITUDE"].astype(float)
-    df["LONGITUDE"] = df["LONGITUDE"].astype(float)
-    df["YEAR_x"] = df["YEAR_x"].astype(int)
-    df["MONTH"] = df["MONTH"].astype(int)
-    df["WATER_LEVEL_MBGL"] = df["WATER_LEVEL_MBGL"].astype(float)
-    df["Rainfall_NASA"] = df["Rainfall_NASA"].astype(float)
+
     coords = df[["LATITUDE", "LONGITUDE"]].drop_duplicates().copy()
     coords["dist2"] = (coords["LATITUDE"] - latitude) ** 2 + (coords["LONGITUDE"] - longitude) ** 2
     nearest = coords.sort_values("dist2").iloc[0]
+
     nearest_df = df[(df["LATITUDE"] == nearest["LATITUDE"]) & (df["LONGITUDE"] == nearest["LONGITUDE"])].copy()
-    nearest_df["date"] = pd.to_datetime(nearest_df["YEAR_x"].astype(str) + "-" + nearest_df["MONTH"].astype(str) + "-01", errors="coerce")
     grouped = nearest_df.groupby("date").agg(
         groundwater=("WATER_LEVEL_MBGL", "mean"),
         rainfall=("Rainfall_NASA", "mean"),
@@ -384,6 +427,8 @@ def get_location_history(latitude, longitude, months=6):
             "groundwater": round(float(row.groundwater), 2),
             "rainfall": round(float(row.rainfall), 2),
         })
+
+    LOCATION_HISTORY_CACHE[cache_key] = {"result": history, "expires_at": now + LOCATION_HISTORY_CACHE_TTL}
     return history
 
 

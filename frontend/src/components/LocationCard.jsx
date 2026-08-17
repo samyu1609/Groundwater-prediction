@@ -1,27 +1,40 @@
 import { FiMapPin } from "react-icons/fi";
 
-function LocationCard({ latitude, longitude }) {
+function LocationCard({ latitude, longitude, location }) {
     const currentDate = new Date().toLocaleDateString("en-US", {
         month: "long",
         day: "numeric",
         year: "numeric"
     });
 
+    const state = location?.state ?? "Tamil Nadu";
+    const district = location?.district ?? "Coimbatore";
+
     return (
-        <div className="card-surface p-6 card-surface-hover">
-            <div className="flex items-center gap-2.5 text-blue-600 mb-4">
+        <div className="card-surface p-6 card-surface-hover text-left">
+            <div className="flex items-center gap-2.5 text-[#0F4C81] mb-4">
                 <FiMapPin className="h-5 w-5" />
                 <h3 className="text-sm font-semibold uppercase tracking-wider text-slate-500">
                     Current Location
                 </h3>
             </div>
-            <div className="space-y-4">
+            <div className="space-y-3">
+                <div className="grid grid-cols-2 gap-2 text-xs font-semibold text-slate-600 pb-2 border-b border-slate-100">
+                    <div>
+                        <span className="text-[10px] text-slate-400 block uppercase">State</span>
+                        <span className="text-slate-800">{state}</span>
+                    </div>
+                    <div>
+                        <span className="text-[10px] text-slate-400 block uppercase">District</span>
+                        <span className="text-slate-800">{district}</span>
+                    </div>
+                </div>
                 <div>
                     <span className="text-xs font-medium text-slate-400 block uppercase tracking-wider">
                         Latitude
                     </span>
                     <span className="text-lg font-semibold text-slate-800">
-                        {latitude !== null && latitude !== undefined ? latitude.toFixed(5) : "Detecting..."}
+                        {latitude !== null && latitude !== undefined ? `${latitude.toFixed(5)}° N` : "Detecting..."}
                     </span>
                 </div>
                 <div>
@@ -29,14 +42,14 @@ function LocationCard({ latitude, longitude }) {
                         Longitude
                     </span>
                     <span className="text-lg font-semibold text-slate-800">
-                        {longitude !== null && longitude !== undefined ? longitude.toFixed(5) : "Detecting..."}
+                        {longitude !== null && longitude !== undefined ? `${longitude.toFixed(5)}° E` : "Detecting..."}
                     </span>
                 </div>
-                <div>
+                <div className="pt-2 border-t border-slate-100">
                     <span className="text-xs font-medium text-slate-400 block uppercase tracking-wider">
                         Current Date
                     </span>
-                    <span className="text-lg font-semibold text-slate-800">
+                    <span className="text-sm font-bold text-slate-700">
                         {currentDate}
                     </span>
                 </div>
