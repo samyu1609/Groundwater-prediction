@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { FiMap, FiCheckCircle, FiAlertTriangle, FiXCircle } from "react-icons/fi";
+import { FiMap } from "react-icons/fi";
 
 const RISK_INDICATORS = {
     Safe:     { emoji: "🟢", label: "Safe",     text: "text-emerald-700", bg: "bg-emerald-50 border-emerald-100", dot: "bg-emerald-600" },
@@ -69,7 +69,10 @@ function RiskMapView() {
 
     const [selectedId, setSelectedId] = useState("erode");
     const activeDistrict = districts.find(d => d.id === selectedId) || districts[0];
-    const config = RISK_INDICATORS[activeDistrict.risk] ?? RISK_INDICATORS.Moderate;
+    const config = RISK_INDICATORS[activeDistrict?.risk] ?? RISK_INDICATORS.Moderate;
+
+    const gwVal = typeof activeDistrict?.groundwater === "number" && !isNaN(activeDistrict.groundwater) ? activeDistrict.groundwater.toFixed(2) : "0.00";
+    const predVal = typeof activeDistrict?.predicted === "number" && !isNaN(activeDistrict.predicted) ? activeDistrict.predicted.toFixed(2) : "0.00";
 
     return (
         <div className="card-surface p-6 text-left">
@@ -143,7 +146,7 @@ function RiskMapView() {
                     <div>
                         <div className="flex items-center justify-between mb-4 pb-2 border-b border-slate-100">
                             <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider">
-                                {activeDistrict.name}
+                                {activeDistrict?.name}
                             </h4>
                             <span className="text-sm">{config.emoji}</span>
                         </div>
@@ -154,7 +157,7 @@ function RiskMapView() {
                                     Groundwater Level
                                 </span>
                                 <span className="text-base font-bold text-slate-800">
-                                    {activeDistrict.groundwater.toFixed(2)} m
+                                    {gwVal} m
                                 </span>
                             </div>
 
@@ -163,7 +166,7 @@ function RiskMapView() {
                                     Prediction (30 Days)
                                 </span>
                                 <span className="text-base font-bold text-blue-700">
-                                    {activeDistrict.predicted.toFixed(2)} m
+                                    {predVal} m
                                 </span>
                             </div>
 
@@ -172,7 +175,7 @@ function RiskMapView() {
                                     Rainfall Level
                                 </span>
                                 <span className="text-sm font-semibold text-slate-700">
-                                    {activeDistrict.rainfall} mm
+                                    {activeDistrict?.rainfall} mm
                                 </span>
                             </div>
                         </div>
@@ -183,7 +186,7 @@ function RiskMapView() {
                             Recommendation
                         </span>
                         <p className="text-[11px] font-semibold text-slate-600 leading-normal">
-                            {activeDistrict.recommendation}
+                            {activeDistrict?.recommendation}
                         </p>
                     </div>
                 </div>

@@ -1,5 +1,5 @@
 import { useState, useMemo } from "react";
-import { FiCalendar, FiFilter, FiList, FiTrendingDown } from "react-icons/fi";
+import { FiFilter, FiList, FiTrendingDown } from "react-icons/fi";
 
 const HISTORICAL_DB = [
     // Coimbatore
@@ -80,16 +80,22 @@ function HistoryView() {
     const cw = W - PL - PR;
     const ch = H - PT - PB;
 
-    const levels = graphData.map(d => d.groundwater);
-    const minL = Math.max(0, Math.min(...levels) - 1.0);
-    const maxL = Math.max(...levels) + 1.0;
+    const levels = graphData.map(d => typeof d.groundwater === "number" ? d.groundwater : 6.8);
+    const minL = levels.length ? Math.max(0, Math.min(...levels) - 1.0) : 0;
+    const maxL = levels.length ? Math.max(...levels) + 1.0 : 10;
 
-    const getX = (i) => PL + (i / (graphData.length - 1)) * cw;
-    const getY = (v) => PT + (1 - (v - minL) / (maxL - minL)) * ch;
+    const divisor = Math.max(1, graphData.length - 1);
+    const getX = (i) => PL + (i / (graphData.length > 1 ? divisor : 1)) * cw;
+    const getY = (v) => {
+        const num = typeof v === "number" && !isNaN(v) ? v : 6.8;
+        const range = Math.max(0.1, maxL - minL);
+        return PT + (1 - (num - minL) / range) * ch;
+    };
 
     let linePath = "";
     graphData.forEach((d, i) => {
-        const x = getX(i), y = getY(d.groundwater);
+        const val = typeof d.groundwater === "number" ? d.groundwater : 6.8;
+        const x = getX(i), y = getY(val);
         linePath += i === 0 ? `M ${x} ${y}` : ` L ${x} ${y}`;
     });
 
@@ -199,7 +205,8 @@ function HistoryView() {
 
                             {/* Node circles */}
                             {graphData.map((d, i) => {
-                                const x = getX(i), y = getY(d.groundwater);
+                                const val = typeof d.groundwater === "number" ? d.groundwater : 6.8;
+                                const x = getX(i), y = getY(val);
                                 const isPrediction = d.isPrediction;
                                 return (
                                     <g key={i}>
@@ -235,24 +242,27 @@ function HistoryView() {
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {filteredRecords.map((rec, i) => (
-                                        <tr key={i} className="border-b border-slate-50 hover:bg-slate-50/50">
-                                            <td className="px-3 py-2 font-bold text-slate-700">
-                                                {rec.year}
-                                                {rec.isPrediction && (
-                                                    <span className="ml-1 text-[8px] bg-blue-100 text-blue-800 px-1 rounded font-bold uppercase">
-                                                        Pred
-                                                    </span>
-                                                )}
-                                            </td>
-                                            <td className="px-3 py-2 text-right font-bold text-slate-800">
-                                                {rec.groundwater.toFixed(2)} m
-                                            </td>
-                                            <td className="px-3 py-2 text-right text-slate-600 font-semibold">
-                                                {rec.rainfall} mm
-                                            </td>
-                                        </tr>
-                                    ))}
+                                    {filteredRecords.map((rec, i) => {
+                                        const gwVal = typeof rec.groundwater === "number" && !isNaN(rec.groundwater) ? rec.groundwater.toFixed(2) : "0.00";
+                                        return (
+                                            <tr key={i} className="border-b border-slate-50 hover:bg-slate-50/50">
+                                                <td className="px-3 py-2 font-bold text-slate-700">
+                                                    {rec.year}
+                                                    {rec.isPrediction && (
+                                                        <span className="ml-1 text-[8px] bg-blue-100 text-blue-800 px-1 rounded font-bold uppercase">
+                                                            Pred
+                                                        </span>
+                                                    )}
+                                                </td>
+                                                <td className="px-3 py-2 text-right font-bold text-slate-800">
+                                                    {gwVal} m
+                                                </td>
+                                                <td className="px-3 py-2 text-right text-slate-600 font-semibold">
+                                                    {rec.rainfall} mm
+                                                </td>
+                                            </tr>
+                                        );
+                                    })}
                                     {!filteredRecords.length && (
                                         <tr>
                                             <td colSpan="3" className="px-3 py-6 text-center text-slate-400 font-medium">
@@ -264,11 +274,10 @@ function HistoryView() {
                             </table>
                         </div>
                     </div>
-                    <div className="mt-4 pt-3 border-t border-slate-100 text-[10px] font-bold text-slate-400 uppercase">
-                        Filtered dataset output
+                    <div className="mt-4 pt-2 border-t border-slate-100 text-[10px] font-semibold text-slate-400">
+                        Historical observation data
                     </div>
                 </div>
-
             </div>
         </div>
     );
