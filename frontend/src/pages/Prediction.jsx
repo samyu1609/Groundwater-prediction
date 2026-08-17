@@ -12,6 +12,7 @@ import HistoryView from "../components/HistoryView";
 import WeatherForecastCard from "../components/WeatherForecastCard";
 import GroundwaterTrendCard from "../components/GroundwaterTrendCard";
 import SystemAlertCard from "../components/SystemAlertCard";
+import MlPredictorForm from "../components/MlPredictorForm";
 import {
     FiLayout, FiTrendingDown, FiCloud, FiInfo,
     FiActivity, FiAlertTriangle, FiBookOpen, FiRefreshCw
@@ -29,7 +30,7 @@ const TABS = [
 function Prediction({ onDataLoaded }) {
     const [isLoading,       setIsLoading]       = useState(true);
     const [error,           setError]           = useState(null);
-    const [activeTab,       setActiveTab]       = useState("dashboard");
+    const [activeTab,       setActiveTab]       = useState("prediction");
     const [predictionData,  setPredictionData]  = useState(null);
     const [forecastData,    setForecastData]    = useState(null);
     const [locationCoords,  setLocationCoords]  = useState({ latitude: null, longitude: null });
@@ -233,56 +234,10 @@ function Prediction({ onDataLoaded }) {
                             <DashboardView predictionData={predictionData} forecastData={forecastData} />
                         )}
 
-                        {/* 2. Prediction View */}
+                        {/* 2. AI Predictor Telemetry Form & Inference View */}
                         {activeTab === "prediction" && (
                             <div className="space-y-6">
-                                {/* Summary Table/Card */}
-                                <div className="card-surface p-6 text-left">
-                                    <div className="flex items-center gap-2 text-[#0F4C81] mb-5">
-                                        <FiActivity className="h-5 w-5" />
-                                        <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500">
-                                            Prediction Summary
-                                        </h3>
-                                    </div>
-                                    <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-                                        <div className="p-3 bg-slate-50 rounded-lg">
-                                            <span className="text-[10px] text-slate-400 block uppercase font-semibold">Current Level</span>
-                                            <span className="text-lg font-bold text-slate-800">{currentLevel.toFixed(2)} m</span>
-                                        </div>
-                                        <div className="p-3 bg-slate-50 rounded-lg">
-                                            <span className="text-[10px] text-slate-400 block uppercase font-semibold">After 7 Days</span>
-                                            <span className="text-lg font-bold text-blue-700">{level7d.toFixed(2)} m</span>
-                                        </div>
-                                        <div className="p-3 bg-slate-50 rounded-lg">
-                                            <span className="text-[10px] text-slate-400 block uppercase font-semibold">After 30 Days</span>
-                                            <span className="text-lg font-bold text-slate-800">{level30d.toFixed(2)} m</span>
-                                        </div>
-                                        <div className="p-3 bg-slate-50 rounded-lg">
-                                            <span className="text-[10px] text-slate-400 block uppercase font-semibold">Expected Change</span>
-                                            <span className={`text-lg font-bold ${expectedChange <= 0 ? "text-emerald-600" : "text-rose-600"}`}>
-                                                {expectedChange > 0 ? "+" : ""}{expectedChange.toFixed(2)} m
-                                            </span>
-                                        </div>
-                                        <div className="p-3 bg-slate-50 rounded-lg col-span-2 md:col-span-1">
-                                            <span className="text-[10px] text-slate-400 block uppercase font-semibold">Prediction Date</span>
-                                            <span className="text-sm font-bold text-slate-700">{predictionDate}</span>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                {/* Detail KPI layout */}
-                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                                    <LocationCard latitude={locationCoords.latitude} longitude={locationCoords.longitude} location={predictionData?.location} />
-                                    <WeatherCard
-                                        rainfall={predictionData?.weather?.rainfall}
-                                        temperature={predictionData?.weather?.temperature}
-                                        humidity={predictionData?.weather?.humidity}
-                                    />
-                                    <PredictionCard groundwaterLevel={currentLevel} />
-                                    <StatusCard risk={predictionData?.risk} />
-                                    <RecommendationCard recommendations={predictionData?.recommendations} />
-                                    <ModelInfoCard />
-                                </div>
+                                <MlPredictorForm />
                             </div>
                         )}
 
